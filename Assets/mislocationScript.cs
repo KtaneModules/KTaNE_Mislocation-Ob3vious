@@ -8,7 +8,6 @@ using Rnd = UnityEngine.Random;
 
 public class mislocationScript : MonoBehaviour {
 
-
 	//publics
 	public KMAudio Audio;
 	public KMSelectable[] Buttons;
@@ -19,9 +18,10 @@ public class mislocationScript : MonoBehaviour {
 	private bool solved;
 	private int[][] grid = { new int[] { 1 } };
 	private int[] coordinates = new int[2];
-	private int groups = 12;
+	private int groups = 9;
 	private bool[] highlighted = new bool[6];
 	private bool isanimating;
+	private int[] optimal;
 
 	//logging
 	static int _moduleIdCounter = 1;
@@ -62,7 +62,15 @@ public class mislocationScript : MonoBehaviour {
 							return false;
 						break;
 					case 4:
-						Mazegen(groups, "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", '*');
+						int y = Rnd.Range(0, grid.Length);
+						int x = Rnd.Range(0, grid[y].Length);
+						while (grid[y][x] == 0)
+						{
+							y = Rnd.Range(0, grid.Length);
+							x = Rnd.Range(0, grid[y].Length);
+						}
+						coordinates = new int[] { x, y };
+						Debug.LogFormat("[Mislocation #{0}] {1}", _moduleID, coordinates.Select(z => z + 1).Join(", "));
 						return false;
 					case 5:
 						if (grid[coordinates[1]][coordinates[0]] == groups + 1)
@@ -112,9 +120,12 @@ public class mislocationScript : MonoBehaviour {
 		}
 	}
 
-	void Start () 
+	void Start()
 	{
+		regenerate:
 		Mazegen(groups, "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", '*');
+		if (!CheckSolve(groups * 2 + 1))
+			goto regenerate;
 	}
 
 	void Update ()
@@ -206,7 +217,7 @@ public class mislocationScript : MonoBehaviour {
 				}
 			}
 		}
-		Debug.LogFormat("[Mislocation #{0}] {1}", _moduleID, grid.Select(z => z.Select(w => (" " + chars.Substring(0, size) + special.ToString())[w]).Join("")).Join("/").Replace("0", " "));
+		Debug.LogFormat("[Mislocation #{0}] (use slashes as new line separators) /{1}", _moduleID, grid.Select(z => z.Select(w => ("-" + chars.Substring(0, size) + special.ToString())[w]).Join("")).Join("/").Replace("0", " "));
 		{
 			int y = Rnd.Range(0, grid.Length);
 			int x = Rnd.Range(0, grid[y].Length);
@@ -220,32 +231,145 @@ public class mislocationScript : MonoBehaviour {
 		}
 	}
 
+	bool CheckSolve(int tilecount)
+	{
+		int[,] matrix = new int[tilecount, tilecount];
+		int n = 0;
+		int p = 0;
+		for (int i = 0; i < grid.Length; i++)
+		{
+			for (int j = 0; j < grid[i].Length; j++)
+			{
+				if (grid[i][j] != 0)
+				{
+					for (int k = 0; k < 4; k++)
+					{
+						int x = -1, y = -1;
+						switch (k)
+						{
+							case 0:
+								if (i > 0 && grid[i - 1][j] != 0)
+								{
+									x = j;
+									y = i - 1;
+								}
+								break;
+							case 1:
+								if (i < grid.Length - 1 && grid[i + 1][j] != 0)
+								{
+									x = j;
+									y = i + 1;
+								}
+								break;
+							case 2:
+								if (j > 0 && grid[i][j - 1] != 0)
+								{
+									x = j - 1;
+									y = i;
+								}
+								break;
+							case 3:
+								if (j < grid[i].Length - 1 && grid[i][j + 1] != 0)
+								{
+									x = j + 1;
+									y = i;
+								}
+								break;
+						}
+						if (x >= 0 && y >= 0)
+						{
+							bool yes = true;
+							int o = 0;
+							for (int l = 0; l < grid.Length && yes; l++)
+							{
+								for (int m = 0; m < grid[l].Length && yes; m++)
+								{
+									//Debug.Log(x + "," + y + ";" + m + "," + l);
+									if (grid[y][x] == grid[l][m] && (x != m || y != l))
+									{
+										yes = false;
+										x = m;
+										y = l;
+										matrix[o, n] = k + 1;
+									}
+									else if (grid[y][x] == grid[l][m] && grid[y][x] == tilecount / 2 + 1)
+									{
+										yes = false;
+										matrix[o, n] = k + 1;
+										p = o;
+									}
+									else if (grid[l][m] != 0)
+										o++;
+								}
+							}
+						}
+					}
+					n++;
+				}
+			}
+		}
+		//string hlep = string.Empty;
+		//for (int i = 0; i < tilecount; i++)
+		//{
+		//	for (int j = 0; j < tilecount; j++)
+		//	{
+		//		hlep += matrix[i, j];
+		//	}
+		//	hlep += "\n";
+		//}
+		//Debug.Log(hlep);
+		int[,] matrixbk = new int[tilecount, tilecount];
+		bool check = true;
+		while (check)
+		{
+			for (int i = 0; i < tilecount; i++)
+				for (int j = 0; j < tilecount; j++)
+					for (int k = 0; k < tilecount; k++)
+						if (matrix[k, i] == 0 && matrix[j, i] != 0 && matrix[k, j] != 0)
+							matrixbk[k, i] = matrix[j, i];
+			check = false;
+			for (int i = 0; i < tilecount; i++)
+				for (int j = 0; j < tilecount; j++)
+					if (matrix[i, j] == 0 && matrixbk[i, j] != 0)
+					{
+						check = true;
+						matrix[i, j] = matrixbk[i, j];
+					}
+		}
+		optimal = new int[tilecount];
+		//string hlep = string.Empty;
+		for (int i = 0; i < tilecount; i++)
+			optimal[i] = matrix[p, i] - 1;
+		bool goodtogo = true;
+		for (int i = 0; i < tilecount; i++)
+			for (int j = 0; j < tilecount; j++)
+				if (matrix[i, j] == 0)
+					goodtogo = false;
+		if (!goodtogo)
+			Debug.LogFormat("[Mislocation #{0}] The maze appears to not be strongly connected. Regenerating...", _moduleID);
+		return goodtogo;
+	}
+
 	IEnumerator Strike()
 	{
 		isanimating = true;
 		for (int j = 0; j < 6; j++)
-		{
 			Buttons[j].GetComponent<MeshRenderer>().material.color = new Color(1, 1, 1, 0.25f);
-		}
 		yield return new WaitForSeconds(0.1f);
 		for (int i = 0; i < 3; i++)
 		{
 			for (int j = 0; j < 6; j++)
-			{
 				Buttons[j].GetComponent<MeshRenderer>().material.color = new Color(1, 1, 1, 0.75f);
-			}
 			yield return new WaitForSeconds(0.1f);
 			for (int j = 0; j < 6; j++)
-			{
 				Buttons[j].GetComponent<MeshRenderer>().material.color = new Color(1, 1, 1, 0.25f);
-			}
 			yield return new WaitForSeconds(0.1f);
 		}
 		isanimating = false;
 	}
 
 #pragma warning disable 414
-	private string TwitchHelpMessage = "'!{0} submit' to submit the current position, '!{0} reset' to regenerate the maze. '!{0} uldr' to press those directions.";
+	private string TwitchHelpMessage = "'!{0} submit' to submit the current position, '!{0} relocate' to randomise position. '!{0} uldr' to press those directions.";
 #pragma warning restore 414
 	IEnumerator ProcessTwitchCommand(string command)
 	{
@@ -253,7 +377,7 @@ public class mislocationScript : MonoBehaviour {
 		command = command.ToLowerInvariant();
 		if (command == "submit")
 			Buttons[5].OnInteract();
-		else if (command == "reset")
+		else if (command == "relocate")
 			Buttons[4].OnInteract();
 		else
 		{
@@ -282,13 +406,24 @@ public class mislocationScript : MonoBehaviour {
 	IEnumerator TwitchHandleForcedSolve()
 	{
 		yield return true;
-		while (!solved)
+		while (grid[coordinates[1]][coordinates[0]] != groups + 1)
 		{
-			if (grid[coordinates[1]][coordinates[0]] == groups + 1)
-				Buttons[5].OnInteract();
-			else
-				Buttons[4].OnInteract();
-			yield return true;
+			int z = 0;
+			for (int i = 0; i < grid.Length; i++)
+				for (int j = 0; j < grid[i].Length; j++)
+				{
+					if (j == coordinates[0] && i == coordinates[1])
+					{
+						Debug.Log(z + ", " + optimal[z]);
+						Buttons[optimal[z]].OnInteract();
+						yield return true;
+						j = grid[i].Length;
+						i = grid.Length - 1;
+					}
+					else if (grid[i][j] != 0)
+						z++;
+				}
 		}
+		Buttons[5].OnInteract();
 	}
 }

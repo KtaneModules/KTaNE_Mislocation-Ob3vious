@@ -15,7 +15,7 @@ MonoBehaviour:
   title: Mislocation
   author: Obvious
   description: A maze of only 25 squares... and the walls are a given... shouldn't
-    be too bad, right? WRONG! ||:)||
-  version: 1.0
+    be too bad, right? WRONG! :)
+  version: 1.3
   outputFolder: build
   previewImage: {fileID: 2800000, guid: 000fb2ad557dfdb4d84bd134bb7bdac7, type: 3}
